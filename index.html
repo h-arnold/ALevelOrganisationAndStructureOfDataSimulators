@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fixed vs Variable Length Records Visualiser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Open+Sans:wght@400;600;700&display=swap');
+
+        body {
+            font-family: 'Open Sans', sans-serif;
+        }
+
+        .font-mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Custom patterns for visualising memory */
+        .padding-pattern {
+            background-image: repeating-linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), repeating-linear-gradient(45deg, #e5e7eb 25%, #f3f4f6 25%, #f3f4f6 75%, #e5e7eb 75%, #e5e7eb);
+            background-position: 0 0, 10px 10px;
+            background-size: 20px 20px;
+        }
+
+        .terminator-pattern {
+            background-color: #fca5a5; /* Red-300 */
+        }
+
+        .header-pattern {
+            background-color: #fcd34d; /* Amber-300 */
+            color: #78350f;
+            font-weight: bold;
+        }
+        
+        /* Animation Classes */
+        .highlight-calc {
+            animation: pulse-green 0.5s ease-in-out;
+            background-color: #dcfce7;
+        }
+        
+        @keyframes pulse-green {
+            0% { background-color: transparent; }
+            50% { background-color: #86efac; }
+            100% { background-color: #dcfce7; }
+        }
+        
+        /* Custom range slider styling */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #4f46e5;
+            cursor: pointer;
+            margin-top: -4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen p-4 md:p-8">
+
+    <!-- Header / Introduction -->
+    <header class="max-w-6xl mx-auto mb-8 text-center">
+        <h1 class="text-3xl md:text-4xl font-bold text-slate-900 mb-2">Fixed vs. Variable Length Records</h1>
+        <p class="text-lg text-slate-600">Data Structures & Organisation</p>
+    </header>
+
+    <!-- Main Application Container -->
+    <main class="max-w-6xl mx-auto space-y-12">
+
+        <!-- PANEL 1: STORAGE & STRUCTURE -->
+        <section class="space-y-6">
+            <div class="flex items-center gap-4 mb-4 border-b border-slate-300 pb-2">
+                <span class="bg-indigo-600 text-white font-bold rounded-full w-8 h-8 flex items-center justify-center shrink-0">1</span>
+                <h2 class="text-2xl font-bold text-slate-800">Visualising Storage Structure</h2>
+            </div>
+
+            <!-- Controls Section -->
+            <div class="bg-white rounded-xl shadow-lg p-6 border-l-4 border-indigo-500">
+                <h3 class="text-xl font-bold mb-4">Input Data</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Add Record -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Add a Record to the Database</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="recordInput" placeholder="e.g. Bennett" maxlength="64" 
+                                   class="flex-1 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                                   onkeydown="if(event.key === 'Enter') addRecord()">
+                            <button onclick="addRecord()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                                Add
+                            </button>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">Enter data to visualise storage allocation.</p>
+                    </div>
+
+                    <!-- Settings -->
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Fixed Field Size (Bytes)</label>
+                        <div class="flex items-center gap-4">
+                            <input type="range" id="fixedSizeSlider" min="5" max="64" value="15" 
+                                   class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                   oninput="updateFixedSize(this.value)">
+                            <span id="fixedSizeValue" class="text-indigo-600 font-mono font-bold text-xl w-8">15</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">Sets reserved space per record (Fixed Length only).</p>
+                    </div>
+                </div>
+
+                <!-- Current Records List -->
+                <div class="mt-6">
+                    <h3 class="text-sm font-semibold text-slate-700 mb-2">Current Records:</h3>
+                    <div id="recordsList" class="flex flex-wrap gap-2">
+                        <span class="text-slate-400 italic text-sm">No records added yet...</span>
+                    </div>
+                </div>
+                
+                <div class="mt-4 flex justify-end">
+                    <button onclick="clearRecords()" class="text-sm text-red-500 hover:text-red-700 font-semibold hover:underline">Clear All Records</button>
+                </div>
+            </div>
+
+            <!-- Visualisation Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Fixed Length Visual -->
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-full">
+                    <div class="bg-blue-50 p-4 border-b border-blue-100">
+                        <h3 class="font-bold text-blue-900 text-lg">Option A: Fixed Length</h3>
+                        <p class="text-sm text-blue-700">Uniform space. Gaps filled with padding.</p>
+                    </div>
+                    
+                    <div class="p-6 flex-1 overflow-x-auto">
+                        <div class="min-w-max">
+                            <div class="flex text-xs font-mono text-slate-400 mb-1 ml-1">
+                                <span>Byte: 0</span>
+                                <span class="ml-auto mr-4">Memory Tape &rarr;</span>
+                            </div>
+                            <div id="fixedVisual" class="flex border-2 border-slate-300 rounded-lg bg-white h-16 items-center">
+                                <div class="px-4 text-slate-400 italic">Add records above to see visual</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 border-t border-slate-200 grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-xs text-slate-500 uppercase tracking-wide">Total Size</div>
+                            <div class="text-2xl font-bold text-slate-800" id="fixedTotal">0 bytes</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-500 uppercase tracking-wide">Internal Fragmentation</div>
+                            <div class="text-2xl font-bold text-red-500" id="fixedWasted">0 bytes</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Variable Length Visual -->
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden flex flex-col h-full">
+                    <div class="bg-green-50 p-4 border-b border-green-100">
+                        <h3 class="font-bold text-green-900 text-lg">Option B: Variable Length</h3>
+                        <p class="text-sm text-green-700">Dynamic allocation.</p>
+                    </div>
+
+                    <div class="p-6 flex-1 overflow-x-auto">
+                        <div class="min-w-max">
+                            <div class="flex text-xs font-mono text-slate-400 mb-1 ml-1">
+                                <span>Byte: 0</span>
+                                <span class="ml-auto mr-4">Memory Tape &rarr;</span>
+                            </div>
+                            <div id="variableVisual" class="flex border-2 border-slate-300 rounded-lg bg-white h-16 items-center">
+                                <div class="px-4 text-slate-400 italic">Add records above to see visual</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 p-4 border-t border-slate-200 grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-xs text-slate-500 uppercase tracking-wide">Total Size</div>
+                            <div class="text-2xl font-bold text-slate-800" id="variableTotal">0 bytes</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-500 uppercase tracking-wide">Overhead (Terminator/Header)</div>
+                            <div class="text-2xl font-bold text-amber-500" id="variableOverhead">0 bytes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- PANEL 2: THE SPEED RACE -->
+        <section class="space-y-6 pt-8 border-t-2 border-dashed border-slate-300">
+            <div class="flex items-center gap-4 mb-4 border-b border-slate-300 pb-2">
+                <span class="bg-rose-600 text-white font-bold rounded-full w-8 h-8 flex items-center justify-center shrink-0">2</span>
+                <h2 class="text-2xl font-bold text-slate-800">The Access Speed Race</h2>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <p class="mb-6 text-slate-600">
+                    To access a specific record (e.g., Record #450), how does the computer find it? 
+                </p>
+
+                <!-- Race Controls -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-slate-100 p-4 rounded-lg border border-slate-200">
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold uppercase text-slate-500 mb-1">1. Dataset</label>
+                        <button onclick="generateRaceData()" class="w-full bg-slate-700 hover:bg-slate-800 text-white py-2 px-4 rounded text-sm font-semibold transition">
+                            🔄 Generate 500 Records
+                        </button>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold uppercase text-slate-500 mb-1">2. Target Record ID</label>
+                        <input type="number" id="raceTarget" min="0" max="499" value="420" class="w-full p-2 border border-slate-300 rounded text-sm font-mono">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold uppercase text-slate-500 mb-1">3. Simulation Speed</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-mono">Slow</span>
+                            <input type="range" id="speedSlider" min="0.05" max="1" step="0.05" value="0.1" 
+                                   class="w-full h-2 bg-slate-300 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                   oninput="updateSpeedLabel(this.value)">
+                            <span class="text-xs font-mono">Fast</span>
+                        </div>
+                        <div class="text-center text-xs text-indigo-600 font-bold mt-1" id="speedLabel">0.1x</div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-xs font-bold uppercase text-slate-500 mb-1">4. Action</label>
+                        <button onclick="startRace()" id="raceBtn" class="w-full bg-rose-600 hover:bg-rose-700 text-white py-2 px-4 rounded text-sm font-bold shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            🏁 Start Race
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Race Tracks & Visuals -->
+                <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    <!-- Lane 1: Fixed -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-end">
+                            <h4 class="font-bold text-blue-900 flex items-center gap-2">
+                                <span class="text-xl">🏎️</span> Fixed Length (Calculated)
+                            </h4>
+                            <span id="fixedTime" class="font-mono text-sm font-bold text-blue-600">Waiting...</span>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="h-4 bg-slate-200 rounded-full overflow-hidden relative">
+                            <div id="fixedBar" class="h-full bg-blue-500 w-0 transition-all duration-300"></div>
+                        </div>
+
+                        <!-- ALGORITHM VISUALISER -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 font-mono text-sm h-48 flex flex-col justify-center items-center shadow-inner relative overflow-hidden">
+                            <p class="text-blue-400 text-xs absolute top-2 left-2 uppercase font-bold">Memory Controller Logic</p>
+                            
+                            <!-- Math Box -->
+                            <div id="fixedMathBox" class="bg-white p-4 rounded shadow text-center hidden">
+                                <div class="text-slate-500 text-xs mb-1">Calculating Address...</div>
+                                <div class="text-lg font-bold">
+                                    <span class="text-purple-600">Start_Addr</span> + 
+                                    (<span class="text-red-500" id="mathIndex">ID</span> × 
+                                    <span class="text-green-600" id="mathSize">Size</span>)
+                                </div>
+                                <div class="my-2 border-b border-slate-300 w-1/2 mx-auto"></div>
+                                <div class="text-2xl font-bold text-blue-600" id="mathResult">Wait</div>
+                            </div>
+
+                             <!-- Success Message -->
+                             <div id="fixedSuccess" class="hidden text-center">
+                                <div class="text-4xl mb-2">🎯</div>
+                                <div class="font-bold text-blue-800">Direct Jump Complete</div>
+                                <div class="text-xs text-blue-600 mt-1">O(1) Constant Time</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lane 2: Variable -->
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-end">
+                            <h4 class="font-bold text-green-900 flex items-center gap-2">
+                                <span class="text-xl">🐢</span> Variable Length (Serial)
+                            </h4>
+                            <span id="variableTime" class="font-mono text-sm font-bold text-green-600">Waiting...</span>
+                        </div>
+                        
+                        <!-- Variable Options -->
+                        <div class="bg-green-50 border border-green-200 rounded p-2 text-xs flex gap-2 items-center">
+                            <span class="font-bold text-green-800">Storage Method:</span>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="radio" name="varMethod" value="terminator" checked onchange="updateVariableMode()"> 
+                                <span>Terminator (Scan)</span>
+                            </label>
+                            <label class="flex items-center gap-1 cursor-pointer">
+                                <input type="radio" name="varMethod" value="header" onchange="updateVariableMode()"> 
+                                <span>Length Header (Skip)</span>
+                            </label>
+                        </div>
+
+                         <!-- Progress Bar -->
+                         <div class="h-4 bg-slate-200 rounded-full overflow-hidden relative">
+                            <div id="variableBar" class="h-full bg-green-500 w-0 transition-none"></div>
+                        </div>
+
+                        <!-- ALGORITHM VISUALISER -->
+                        <div class="bg-slate-800 border border-slate-700 rounded-lg p-4 font-mono text-sm h-48 flex flex-col shadow-inner relative overflow-hidden">
+                            <p class="text-slate-400 text-xs absolute top-2 left-2 uppercase font-bold">Disk Read Head</p>
+                            
+                            <div class="mt-8 flex-1 flex items-center justify-center">
+                                <!-- Tape Window -->
+                                <div class="relative w-full overflow-hidden h-16 bg-slate-900 border-y-2 border-slate-600 flex items-center justify-center">
+                                    <!-- The Tape -->
+                                    <div id="variableTape" class="flex items-center transition-transform duration-75 text-white text-lg">
+                                        <!-- Content Injected via JS -->
+                                        <span class="text-slate-500 italic text-sm">Waiting for data...</span>
+                                    </div>
+                                    
+                                    <!-- The Read Head (Static overlay) -->
+                                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                        <div class="w-8 h-10 border-2 border-red-500 bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.5)] z-10"></div>
+                                        <div class="absolute -top-6 text-xs text-red-500 font-bold bg-slate-900 px-1">READ</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Counters -->
+                            <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-400">
+                                <div>Records Found: <span id="termCount" class="text-white font-bold">0</span></div>
+                                <div class="text-right">Bytes Processed: <span id="byteCount" class="text-white font-bold">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Comparison / Summary -->
+        <section class="bg-indigo-900 text-white rounded-xl shadow-lg p-6 md:p-8">
+            <h2 class="text-2xl font-bold mb-4">Summary & Evaluation</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h4 class="font-bold text-indigo-300 mb-2 uppercase text-sm">Key Concepts</h4>
+                    <ul class="space-y-2 text-indigo-100 text-sm">
+                        <li class="flex gap-2">
+                            <span class="font-bold text-white">Terminator Method:</span>
+                            Requires a scan of every byte to find the marker. High I/O overhead.
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold text-white">Length Header Method:</span>
+                            Reads the size, then skips data. Much lower I/O (fewer bytes processed), but still serial access.
+                        </li>
+                        <li class="flex gap-2">
+                            <span class="font-bold text-white">Direct Access (Fixed):</span>
+                            Instant Calculation. Zero search overhead.
+                        </li>
+                    </ul>
+                </div>
+                <div class="bg-indigo-800 p-4 rounded-lg">
+                    <h4 class="font-bold text-white mb-2 flex items-center gap-2">
+                        <span>🤔</span> Efficiency Challenge
+                    </h4>
+                    <p class="text-indigo-200 text-sm mb-3">
+                        Why don't we just use "Length Header" variable records for everything?
+                    </p>
+                    <details class="group">
+                        <summary class="cursor-pointer text-xs font-bold text-indigo-300 hover:text-white transition-colors">Click for Answer</summary>
+                        <p class="mt-2 text-xs text-indigo-100 italic">
+                             Calculating the address of the 500th record is still impossible without reading the previous 499 length headers! You still have to 'walk' the chain, even if you are jumping. Fixed Length lets you teleport.
+                        </p>
+                    </details>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="max-w-6xl mx-auto mt-12 text-center text-slate-400 text-sm pb-8">
+        <p>Generated for A-Level Computer Science</p>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // --- PANEL 1 LOGIC (Visualiser) ---
+        let records = ['Bennett', 'Bo']; 
+        let fixedSize = 15; 
+        const TERMINATOR_CHAR = '#';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            render();
+            // Init slider label
+            updateSpeedLabel(document.getElementById('speedSlider').value);
+        });
+
+        function addRecord() {
+            const input = document.getElementById('recordInput');
+            const value = input.value.trim();
+            if (value) {
+                records.push(value);
+                input.value = '';
+                render();
+            }
+        }
+
+        function updateFixedSize(val) {
+            fixedSize = parseInt(val);
+            document.getElementById('fixedSizeValue').innerText = fixedSize;
+            render();
+        }
+
+        function clearRecords() {
+            records = [];
+            render();
+        }
+
+        function render() {
+            renderRecordList();
+            renderFixedVisual();
+            renderVariableVisual();
+        }
+
+        function renderRecordList() {
+            const listEl = document.getElementById('recordsList');
+            if (records.length === 0) {
+                listEl.innerHTML = '<span class="text-slate-400 italic text-sm">No records added yet...</span>';
+                return;
+            }
+            listEl.innerHTML = records.map((r, i) => `
+                <div class="inline-flex items-center bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-sm">
+                    <span class="font-mono mr-2">${r}</span>
+                    <button onclick="removeRecord(${i})" class="hover:text-red-500 font-bold">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function removeRecord(index) {
+            records.splice(index, 1);
+            render();
+        }
+
+        function renderFixedVisual() {
+            const container = document.getElementById('fixedVisual');
+            let html = '';
+            let totalBytes = 0;
+            let wastedBytes = 0;
+
+            if (records.length === 0) {
+                container.innerHTML = '<div class="px-4 text-slate-400 italic">Add records above to see visual</div>';
+                updateStats('fixed', 0, 0);
+                return;
+            }
+
+            records.forEach(record => {
+                const displayRecord = record.substring(0, fixedSize); 
+                const contentLen = displayRecord.length;
+                const paddingLen = fixedSize - contentLen;
+                const validPadding = Math.max(0, paddingLen);
+
+                totalBytes += fixedSize;
+                wastedBytes += validPadding;
+
+                for (let i = 0; i < contentLen; i++) {
+                    html += createBlock(displayRecord[i], 'bg-blue-100 text-blue-800');
+                }
+                for (let i = 0; i < validPadding; i++) {
+                    html += createBlock('&nbsp;', 'padding-pattern border-slate-200');
+                }
+                html += '<div class="w-1 bg-blue-500 h-full mx-0.5"></div>';
+            });
+
+            container.innerHTML = html;
+            updateStats('fixed', totalBytes, wastedBytes);
+        }
+
+        function renderVariableVisual() {
+            const container = document.getElementById('variableVisual');
+            let html = '';
+            let totalBytes = 0;
+            let overheadBytes = 0;
+
+            if (records.length === 0) {
+                container.innerHTML = '<div class="px-4 text-slate-400 italic">Add records above to see visual</div>';
+                updateStats('variable', 0, 0);
+                return;
+            }
+
+            records.forEach(record => {
+                const len = record.length;
+                totalBytes += len + 1; 
+                overheadBytes += 1;
+
+                for (let i = 0; i < len; i++) {
+                    html += createBlock(record[i], 'bg-green-100 text-green-800');
+                }
+                html += createBlock(TERMINATOR_CHAR, 'terminator-pattern text-red-600 font-bold');
+            });
+
+            container.innerHTML = html;
+            updateStats('variable', totalBytes, overheadBytes);
+        }
+
+        function createBlock(char, classes) {
+            return `<div class="${classes} w-8 h-10 flex items-center justify-center border-r border-slate-300 font-mono text-sm last:border-r-0 shrink-0">${char}</div>`;
+        }
+
+        function updateStats(type, total, specific) {
+            if (type === 'fixed') {
+                document.getElementById('fixedTotal').innerText = `${total} bytes`;
+                document.getElementById('fixedWasted').innerText = `${specific} bytes`;
+            } else {
+                document.getElementById('variableTotal').innerText = `${total} bytes`;
+                document.getElementById('variableOverhead').innerText = `${specific} bytes`;
+            }
+        }
+
+
+        // --- PANEL 2 LOGIC (Race Simulation) ---
+        let raceData = [];
+        let raceBlocks = []; // Array of objects { char: string, type: 'data'|'term'|'header' }
+        let isRacing = false;
+        
+        function updateSpeedLabel(val) {
+            document.getElementById('speedLabel').innerText = val + "x";
+        }
+        
+        function updateVariableMode() {
+            // Re-generate race data based on new selection
+            if (raceData.length > 0) {
+                generateRaceData();
+            }
+        }
+
+        function generateRaceData() {
+            const dummyNames = ["Smith", "Jones", "Williams", "Taylor", "Davies", "Evans", "Thomas", "Roberts", "Walker", "Wright", "Robinson", "Thompson", "White", "Hughes", "Edwards", "Green", "Lewis", "Wood", "Harris", "Martin"];
+            raceData = [];
+            
+            // Generate 500 records
+            for(let i=0; i<500; i++) {
+                const randName = dummyNames[Math.floor(Math.random() * dummyNames.length)];
+                const randSuffix = Math.floor(Math.random() * 1000);
+                raceData.push(`${randName}${randSuffix}`);
+            }
+            
+            // Generate the Tape Visual Block Array based on Method
+            const useHeader = document.querySelector('input[name="varMethod"]:checked').value === 'header';
+            raceBlocks = [];
+
+            raceData.forEach(record => {
+                if (useHeader) {
+                    // Method B: Header
+                    raceBlocks.push({ char: record.length.toString(), type: 'header', lengthValue: record.length });
+                    for(let char of record) {
+                        raceBlocks.push({ char: char, type: 'data' });
+                    }
+                } else {
+                    // Method A: Terminator
+                    for(let char of record) {
+                        raceBlocks.push({ char: char, type: 'data' });
+                    }
+                    raceBlocks.push({ char: TERMINATOR_CHAR, type: 'term' });
+                }
+            });
+
+            
+            // Update UI
+            document.getElementById('raceBtn').disabled = false;
+            document.getElementById('raceBtn').innerText = "🏁 Start Race";
+            
+            // Reset Bars & Visuals
+            document.getElementById('fixedBar').style.width = '0%';
+            document.getElementById('variableBar').style.width = '0%';
+            document.getElementById('fixedTime').innerText = "Ready";
+            document.getElementById('variableTime').innerText = "Ready";
+            document.getElementById('fixedMathBox').classList.add('hidden');
+            document.getElementById('fixedSuccess').classList.add('hidden');
+            
+            // Initial Tape Render
+            const tape = document.getElementById('variableTape');
+            tape.innerHTML = '<span class="text-slate-500 italic text-sm">Data Loaded. Ready to scan.</span>';
+        }
+        
+        async function startRace() {
+            if(isRacing) return;
+            isRacing = true;
+            document.getElementById('raceBtn').disabled = true;
+            // document.getElementById('speedSlider').disabled = true; // Optional: disable or allow dynamic speed
+            
+            const targetId = parseInt(document.getElementById('raceTarget').value);
+            const maxId = raceData.length - 1;
+            
+            if(targetId > maxId || targetId < 0) {
+                alert(`Please choose a Target ID between 0 and ${maxId}`);
+                isRacing = false;
+                document.getElementById('raceBtn').disabled = false;
+                return;
+            }
+            
+            // Reset Visuals
+            document.getElementById('fixedBar').style.width = '0%';
+            document.getElementById('variableBar').style.width = '0%';
+            document.getElementById('fixedMathBox').classList.remove('hidden');
+            document.getElementById('fixedSuccess').classList.add('hidden');
+            document.getElementById('mathResult').innerText = "Wait";
+            
+            const initialSpeed = parseFloat(document.getElementById('speedSlider').value);
+            
+            // START RACES
+            await Promise.all([runFixedRace(targetId, initialSpeed), runVariableRace(targetId)]);
+            
+            isRacing = false;
+            document.getElementById('raceBtn').disabled = false;
+        }
+        
+        // Race 1: Fixed
+        function runFixedRace(targetId, speedMult) {
+            return new Promise(resolve => {
+                const timeLabel = document.getElementById('fixedTime');
+                const mathBox = document.getElementById('fixedMathBox');
+                const resultText = document.getElementById('mathResult');
+                const indexSpan = document.getElementById('mathIndex');
+                const sizeSpan = document.getElementById('mathSize');
+                const bar = document.getElementById('fixedBar');
+                
+                const baseDelay = 800;
+                const jumpDelay = 500;
+                const delayFactor = (1 / speedMult); 
+                
+                indexSpan.innerText = targetId;
+                sizeSpan.innerText = fixedSize;
+                
+                setTimeout(() => {
+                    const resultAddr = 0 + (targetId * fixedSize);
+                    resultText.innerText = `Mem Addr: ${resultAddr}`;
+                    mathBox.classList.add('highlight-calc');
+                    
+                    setTimeout(() => {
+                         mathBox.classList.add('hidden');
+                         mathBox.classList.remove('highlight-calc');
+                         document.getElementById('fixedSuccess').classList.remove('hidden');
+                         bar.style.width = '100%';
+                         timeLabel.innerText = "0.002 ms";
+                         resolve();
+                    }, jumpDelay * delayFactor);
+                    
+                }, baseDelay * delayFactor);
+            });
+        }
+        
+        // Race 2: Variable (Supports both modes)
+        function runVariableRace(targetId) {
+            return new Promise(resolve => {
+                const timeLabel = document.getElementById('variableTime');
+                const bar = document.getElementById('variableBar');
+                const tape = document.getElementById('variableTape');
+                const termCountEl = document.getElementById('termCount');
+                const byteCountEl = document.getElementById('byteCount');
+                const slider = document.getElementById('speedSlider');
+                
+                const useHeader = document.querySelector('input[name="varMethod"]:checked').value === 'header';
+                
+                let blockIndex = 0;
+                let recordsFound = 0;
+                let bytesActuallyRead = 0; // COUNTER FOR PEDAGOGICAL ACCURACY
+                let startTime = Date.now();
+                let speedAccumulator = 0;
+                
+                function updateTapeVisual(currentIndex) {
+                    const start = Math.max(0, currentIndex - 4);
+                    const end = Math.min(raceBlocks.length, currentIndex + 5);
+                    let html = '';
+                    
+                    for(let i=start; i<end; i++) {
+                        const block = raceBlocks[i];
+                        const isCenter = i === currentIndex;
+                        
+                        let classes = "w-8 h-10 flex items-center justify-center font-mono text-sm shrink-0 border border-slate-700 bg-slate-800";
+                        if(block.type === 'term') classes += " text-red-400 font-bold terminator-pattern";
+                        else if (block.type === 'header') classes += " text-amber-900 font-bold header-pattern";
+                        else classes += " text-green-400";
+                        
+                        html += `<div class="${classes}">${block.char}</div>`;
+                    }
+                    tape.innerHTML = html;
+                }
+
+                function step() {
+                    const speedMult = parseFloat(slider.value);
+                    let baseSpeed = 1; 
+                    
+                    // Logic depends on method
+                    if (useHeader) {
+                        baseSpeed = 0.2; // Slower because each step is a big jump
+                        if (recordsFound > 2 && recordsFound < targetId - 2) baseSpeed = 10; // Turbo
+                    } else {
+                        if (recordsFound > 2 && recordsFound < targetId - 2) baseSpeed = 50; 
+                    }
+
+                    const effectiveSpeed = baseSpeed * speedMult;
+                    speedAccumulator += effectiveSpeed;
+                    
+                    if (useHeader) {
+                         if (speedAccumulator >= 1) {
+                             speedAccumulator = 0; 
+                             
+                             if (blockIndex >= raceBlocks.length) { finish(); return; }
+                             
+                             const block = raceBlocks[blockIndex];
+                             if (block.type === 'header') {
+                                 if (recordsFound === targetId) { finish(); return; }
+                                 
+                                 recordsFound++;
+                                 termCountEl.innerText = recordsFound;
+                                 bytesActuallyRead += 1; // Only reading the header byte
+
+                                 // JUMP!
+                                 blockIndex += block.lengthValue + 1; 
+                             } else {
+                                 blockIndex++;
+                                 bytesActuallyRead += 1;
+                             }
+                             
+                             byteCountEl.innerText = bytesActuallyRead;
+                             updateTapeVisual(blockIndex);
+                             
+                             const pct = (blockIndex / raceBlocks.length) * 100;
+                             bar.style.width = `${pct}%`;
+                             
+                             if (blockIndex < raceBlocks.length) requestAnimationFrame(step);
+                             else finish();
+                         } else {
+                             requestAnimationFrame(step);
+                         }
+                    } else {
+                        // Terminator Mode (Scan chars)
+                        let stepsToTake = Math.floor(speedAccumulator);
+                        speedAccumulator -= stepsToTake;
+                        
+                        for(let k=0; k<stepsToTake; k++) {
+                            if (blockIndex >= raceBlocks.length) break;
+                            const block = raceBlocks[blockIndex];
+                            
+                            bytesActuallyRead++; // Reading every char
+                            
+                            if (block.type === 'term') {
+                                recordsFound++;
+                                termCountEl.innerText = recordsFound;
+                                if (recordsFound === targetId) { finish(); return; }
+                            }
+                            blockIndex++;
+                        }
+                        
+                        if (stepsToTake > 0) {
+                            byteCountEl.innerText = bytesActuallyRead;
+                            updateTapeVisual(blockIndex);
+                            const pct = (blockIndex / raceBlocks.length) * 100;
+                            bar.style.width = `${pct}%`;
+                        }
+                        
+                        if (blockIndex < raceBlocks.length) requestAnimationFrame(step);
+                        else finish();
+                    }
+                }
+                
+                function finish() {
+                    const duration = Date.now() - startTime;
+                    timeLabel.innerText = `${duration} ms`; 
+                    bar.style.width = '100%';
+                    tape.innerHTML = '<span class="text-green-400 font-bold">RECORD FOUND</span>';
+                    resolve();
+                }
+                
+                step();
+            });
+        }
+
+    </script>
+</body>
+</html>
